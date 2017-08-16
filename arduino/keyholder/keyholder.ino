@@ -2,9 +2,8 @@
 
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
+#include <WiFiManager.h>
 
-const char* ssid = "<your_ssid>";
-const char* password = "<your_pw>";
 char auth[] = "<your_blynk_api_key>";
 
 const int KEY_0 = 5; // node mcu d1
@@ -29,9 +28,14 @@ void setup () {
     digitalRead(KEY_3),
     digitalRead(KEY_4)
   };
-  
+
   Serial.begin(115200);
-  Blynk.begin(auth, ssid, password);
+
+  WiFiManager wifiManager;
+  //wifiManager.resetSettings();    //Uncomment this to wipe WiFi settings on boot.
+  wifiManager.autoConnect("NodeMCU");
+  Serial.println("Wifi connected");
+  Blynk.config(auth);
 
   updateTable(status);
   delay(3000);
