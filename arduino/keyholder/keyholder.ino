@@ -3,8 +3,18 @@
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
 #include <WiFiManager.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include <TimeLib.h>
 
-char auth[] = "<your_blynk_api_key>";
+#define NTP_OFFSET   2 * 60 * 60  // In seconds
+#define NTP_INTERVAL 60 * 1000    // In miliseconds
+#define NTP_ADDRESS  "europe.pool.ntp.org"
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
+
+char auth[] = "<enter_api_key>";
 
 const int KEY_0 = 5; // node mcu d1
 const int KEY_1 = 4; // node mcu d2
@@ -13,6 +23,7 @@ const int KEY_3 = 12; // node mcu d6
 const int KEY_4 = 13; // node mcu d7
 
 int status[5];
+boolean tableInitialized = false;
 
 void setup () {
   pinMode(KEY_0, INPUT_PULLUP);
@@ -30,19 +41,29 @@ void setup () {
   };
 
   Serial.begin(115200);
+  timeClient.begin();
 
   WiFiManager wifiManager;
   //wifiManager.resetSettings();    //Uncomment this to wipe WiFi settings on boot.
   wifiManager.autoConnect("NodeMCU");
   Serial.println("Wifi connected");
   Blynk.config(auth);
-
-  updateTable(status);
-  delay(3000);
 }
  
 void loop() {
   Blynk.run();
+  if (!tableInitialized) {
+    initTable(status);
+    tableInitialized = true;
+  }
+  
+  timeClient.update();
+  checkForUpdate();
+
+  delay(1000);
+}
+
+void checkForUpdate() {
   /* 
    * A maximum of one pin is updated each loop. This is because we are limited in the 
    * amount of push notifications we can send. Also the use case does not require too
@@ -77,22 +98,29 @@ void loop() {
     
     status[updatedPin.pin] = updatedPin.value;
     // value of 0 is connected, value of 1 is disconnected
-    String statusValue = updatedPin.value == 0 ? "added" : "removed";
+    String statusValue = updatedPin.value == 0 ? "available" : "missing";
     Serial.println(statusValue);
     Serial.println();
-    //TODO: Update table and send push notification
-    Blynk.notify("Activity on keychain. Key " + String(updatedPin.pin) + " " + statusValue);
-    updateTable(status);
-  }
 
-  delay(1000);
+    Blynk.notify("Activity on keychain. Key " + String(updatedPin.pin) + " " + statusValue);
+    Blynk.virtualWrite(V0, "update", updatedPin.pin, "Key " + String(updatedPin.pin), statusValue);
+    Blynk.virtualWrite(V0, "update", 5, "Last Change (Key " + String(updatedPin.pin) + ")", getDate());
+  }
 }
 
-void updateTable(int status[]) {
-  Blynk.virtualWrite(V1, "clr");
+void initTable(int status[]) {
+  Blynk.virtualWrite(V0, "clr");
   for (int i = 0; i <= 4; i++) {
     String statusValue = status[i] == 0 ? "available" : "missing";
-    Blynk.virtualWrite(V1, "add", i, "Key " + String(i), statusValue);
+    Blynk.virtualWrite(V0, "add", i, "Key " + String(i), statusValue);
   }
+  Blynk.virtualWrite(V0, "add", 5, "Last Change", getDate());
+  Blynk.virtualWrite(V0, "add", 6, "Last Init", getDate());
+}
+
+String getDate() {
+  timeClient.update();
+  time_t t = timeClient.getEpochTime();
+  return String(year(t)) + "-" + String(month(t)) + "-" + String(day(t));
 }
 
