@@ -14,7 +14,7 @@
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 
-char auth[] = "<your_blynk_token>";
+char auth[] = "<your_blynk_api_key>";
 
 const int KEY_0 = 5; // node mcu d1
 const int KEY_1 = 4; // node mcu d2
